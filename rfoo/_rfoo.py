@@ -53,6 +53,7 @@ import threading
 import logging
 import inspect
 import socket
+import select
 import sys
 import os
 
@@ -446,7 +447,7 @@ class Server(object):
         self._handler_type = handler_type
         self._conn = conn
         self._ssl_context = ssl_context
-        self._stop = Event()
+        self._stop = threading.Event()
 
     def stop(self):
         self._stop.set()
@@ -475,6 +476,9 @@ class Server(object):
             while True:
                 if self.stopped():
                     break
+                rlist,dummy,dummy = select.select([self._conn],[],[],0.1)
+                if len(rlist) == 0:
+                    continue
                 conn, addr = self._conn.accept()
                 conn.settimeout(None)
                 if self._ssl_context != None:
