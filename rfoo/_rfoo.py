@@ -75,6 +75,8 @@ try:
 except ImportError:
     import _thread as thread
 
+from threading import Event
+
 try:
     import __builtin__ as builtins
 except ImportError:
@@ -444,7 +446,14 @@ class Server(object):
         self._handler_type = handler_type
         self._conn = conn
         self._ssl_context = ssl_context
-    
+        self._stop = Event()
+
+    def stop(self):
+        self._stop.set()
+
+    def stopped(self):
+        return self._stop.isSet()
+
     def close(self):
         if self._conn is not None:
             try:
@@ -464,6 +473,8 @@ class Server(object):
             self._conn.listen(5)
 
             while True:
+                if self.stopped():
+                    break
                 conn, addr = self._conn.accept()
                 conn.settimeout(None)
                 if self._ssl_context != None:
