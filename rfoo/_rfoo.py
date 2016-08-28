@@ -53,6 +53,7 @@ import threading
 import logging
 import inspect
 import socket
+import select
 import sys
 import os
 
@@ -74,6 +75,8 @@ try:
     import thread
 except ImportError:
     import _thread as thread
+
+from threading import Event
 
 try:
     import __builtin__ as builtins
@@ -176,6 +179,14 @@ class BaseHandler(object):
         members = inspect.getmembers(self, inspect.ismethod)
         return [m[0] for m in members if not m[0].startswith('_')]
 
+class SSLHandler(BaseHandler):
+	"""
+	Handler for SSL server. This handler has access to SSL Socket object of the connection
+	"""
+	def __init__(self,conn,addr,context=None):
+		"""docstring for __init__"""
+		super(SSLHandler,self).__init__(addr,context)
+		self._conn = conn
 
 def restrict_local(foo):
     """Decorator to restrict handler method to local proxies only."""
@@ -264,7 +275,21 @@ class InetConnection(Connection):
         self._conn.connect((host, port))
         return self
 
-        
+class SSLConnection(Connection):
+    """Connection type for SSL wrapped INET sockets."""
+
+    def __init__(self,ssl_context=None):
+        import ssl
+        if ssl_context == None:
+            ssl_context = ssl.create_default_context()
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ssl_conn = ssl_context.wrap_socket(s)
+        #s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        Connection.__init__(self, ssl_conn)
+
+    def connect(self, host=LOOPBACK, port=DEFAULT_PORT):
+        self._conn.connect((host, port))
+        return self
 
 class UnixConnection(Connection):
     """Connection type for Unix sockets."""
@@ -417,11 +442,19 @@ def run_in_thread(foo):
 class Server(object):
     """Serve calls over connection."""
 
-    def __init__(self, handler_type, handler_context=None, conn=None):
+    def __init__(self, handler_type, handler_context=None, conn=None, ssl_context=None):
         self._handler_context = handler_context
         self._handler_type = handler_type
         self._conn = conn
-    
+        self._ssl_context = ssl_context
+        self._stop = threading.Event()
+
+    def stop(self):
+        self._stop.set()
+
+    def stopped(self):
+        return self._stop.isSet()
+
     def close(self):
         if self._conn is not None:
             try:
@@ -441,8 +474,20 @@ class Server(object):
             self._conn.listen(5)
 
             while True:
+                if self.stopped():
+                    break
+                rlist,dummy,dummy = select.select([self._conn],[],[],0.1)
+                if len(rlist) == 0:
+                    continue
                 conn, addr = self._conn.accept()
                 conn.settimeout(None)
+                if self._ssl_context != None:
+                    try:
+                        conn = self._ssl_context.wrap_socket(conn, server_side=True)
+                    except Exception as e:
+                        logging.warning(str(e))
+                        conn.close()
+                        continue
                 self._on_accept(conn, addr)
 
         finally:
@@ -463,7 +508,12 @@ class Server(object):
             # Instantiate handler for the lifetime of the connection,
             # making it possible to manage a state between calls.
             #
-            handler = self._handler_type(addr, self._handler_context)
+            if SSLHandler in self._handler_type.__bases__:
+                # if SSL connection is used, pass both SSL socket and addr to handler
+                # this is needed so that the handler can use SSL extension functions
+                handler = self._handler_type(conn,addr, self._handler_context)
+            else:
+                handler = self._handler_type(addr, self._handler_context)
 
             try:
                 while True:
@@ -520,7 +570,24 @@ class InetServer(Server):
 
     _on_accept = run_in_thread(Server._on_accept)
 
+class SSLServer(Server):
+    """Serve calls over SSL wrapped INET sockets."""
 
+    def __init__(self, handler_type, handler_context=None, ssl_context=None,certfile=None,keyfile=None):
+        import ssl
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        s.settimeout(None)
+        if ssl_context == None and certfile != None and keyfile != None:
+            context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            context.load_cert_chain(certfile=certfile, keyfile=keyfile)
+        Server.__init__(self, handler_type, handler_context, s, ssl_context)
+
+    def start(self, host=LOOPBACK, port=DEFAULT_PORT):
+        self._conn.bind((host, port))
+        Server.start(self) 
+
+    _on_accept = run_in_thread(Server._on_accept)
 
 class UnixServer(Server):
     """Serve calls over Unix sockets."""

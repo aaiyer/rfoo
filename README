@@ -12,6 +12,12 @@ called rfoo.marsh which extends the Python built in marshal module by
 eliminating serialization of code objects and protecting against bad input. 
 The result is a safe to use ultra fast serializer.
 
+SSL wrapper support added by
+Jiri Lunacek of Hosting90 Systems s.r.o.
+Email: jiri.lunacek@hosting90.cz
+Website: http://www.hosting90.cz
+SSL patch version: 0
+
 Example server code:
 > class MyHandler(rfoo.BaseHandler):
 >     def echo(self, str):
