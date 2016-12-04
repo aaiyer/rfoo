@@ -266,8 +266,9 @@ class Connection(object):
 class InetConnection(Connection):
     """Connection type for INET sockets."""
 
-    def __init__(self):
+    def __init__(self, timeout=None):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
         #s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         Connection.__init__(self, s)
 
@@ -278,11 +279,12 @@ class InetConnection(Connection):
 class SSLConnection(Connection):
     """Connection type for SSL wrapped INET sockets."""
 
-    def __init__(self,ssl_context=None):
+    def __init__(self,ssl_context=None, timeout=None):
         import ssl
         if ssl_context == None:
             ssl_context = ssl.create_default_context()
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
         ssl_conn = ssl_context.wrap_socket(s)
         #s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         Connection.__init__(self, ssl_conn)
@@ -442,11 +444,12 @@ def run_in_thread(foo):
 class Server(object):
     """Serve calls over connection."""
 
-    def __init__(self, handler_type, handler_context=None, conn=None, ssl_context=None):
+    def __init__(self, handler_type, handler_context=None, conn=None, ssl_context=None, timeout=None):
         self._handler_context = handler_context
         self._handler_type = handler_type
         self._conn = conn
         self._ssl_context = ssl_context
+        self._timeout = timeout
         self._stop = threading.Event()
 
     def stop(self):
@@ -480,7 +483,7 @@ class Server(object):
                 if len(rlist) == 0:
                     continue
                 conn, addr = self._conn.accept()
-                conn.settimeout(None)
+                conn.settimeout(self._timeout)
                 if self._ssl_context != None:
                     try:
                         conn = self._ssl_context.wrap_socket(conn, server_side=True)
@@ -558,11 +561,11 @@ class Server(object):
 class InetServer(Server):
     """Serve calls over INET sockets."""
     
-    def __init__(self, handler_type, handler_context=None):
+    def __init__(self, handler_type, handler_context=None, timeout=None):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.settimeout(None)
-        Server.__init__(self, handler_type, handler_context, s)
+        Server.__init__(self, handler_type, handler_context, s, None, timeout)
 
     def start(self, host=LOOPBACK, port=DEFAULT_PORT):
         self._conn.bind((host, port))
@@ -573,7 +576,7 @@ class InetServer(Server):
 class SSLServer(Server):
     """Serve calls over SSL wrapped INET sockets."""
 
-    def __init__(self, handler_type, handler_context=None, ssl_context=None,certfile=None,keyfile=None):
+    def __init__(self, handler_type, handler_context=None, ssl_context=None,certfile=None,keyfile=None, timeout=None):
         import ssl
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -581,7 +584,7 @@ class SSLServer(Server):
         if ssl_context == None and certfile != None and keyfile != None:
             context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
             context.load_cert_chain(certfile=certfile, keyfile=keyfile)
-        Server.__init__(self, handler_type, handler_context, s, ssl_context)
+        Server.__init__(self, handler_type, handler_context, s, ssl_context, timeout)
 
     def start(self, host=LOOPBACK, port=DEFAULT_PORT):
         self._conn.bind((host, port))
