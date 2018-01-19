@@ -103,7 +103,7 @@ INTEGER = 'i'.encode()[0]
 
 
 _loads = _marshal.loads
-_dumps = _marshal.dumps
+_dumps = lambda x: _marshal.dumps(x, 2)
 
 
 
