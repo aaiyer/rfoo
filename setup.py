@@ -9,14 +9,14 @@
     Redistribution and use in source and binary forms, with or without modification,
     are permitted provided that the following conditions are met:
 
-    1. Redistributions of source code must retain the above copyright notice, 
+    1. Redistributions of source code must retain the above copyright notice,
     this list of conditions and the following disclaimer.
 
-    2. Redistributions in binary form must reproduce the above copyright 
+    2. Redistributions in binary form must reproduce the above copyright
     notice, this list of conditions and the following disclaimer in the
     documentation and/or other materials provided with the distribution.
 
-    3. Neither the name of Nir Aides nor the names of other contributors may 
+    3. Neither the name of Nir Aides nor the names of other contributors may
     be used to endorse or promote products derived from this software without
     specific prior written permission.
 
@@ -37,28 +37,11 @@ import sys
 
 from distutils.core import setup
 from distutils.extension import Extension
-
-try:
-    from Cython.Distutils import build_ext
-except ImportError:
-    sys.stderr.write("""===========================================================
-rfoo depends on Cython - http://cython.org/
-
-To install Cython follow the simple instructions at:
-http://docs.cython.org/src/quickstart/install.html
-
-Basically, you need gcc installed on your system:
-    sudo apt-get install build-essential
-
-and then setup the latest source version of Cython with:
-    sudo python setup.py install
-===========================================================\n""")
-    sys.exit(1)
-
+from distutils.command.build_ext import build_ext
 
 if 'bdist_egg' in sys.argv:
     sys.stderr.write("""===========================================================
-rfoo can not be installed by easy_install due to conflict 
+rfoo can not be installed by easy_install due to conflict
 between easy_install and Cython:
 http://mail.python.org/pipermail/distutils-sig/2007-September/008205.html
 
@@ -84,6 +67,3 @@ setup(
     cmdclass = {'build_ext': build_ext},
     ext_modules = ext_modules
 )
-
-
-
