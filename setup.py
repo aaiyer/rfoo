@@ -37,7 +37,7 @@ import sys
 
 from distutils.core import setup
 from distutils.extension import Extension
-from distutils.command.build_ext import build_ext
+from Cython.Distutils import build_ext
 
 if 'bdist_egg' in sys.argv:
     sys.stderr.write("""===========================================================
